@@ -1,0 +1,163 @@
+---
+name: CICD
+
+"on":
+  workflow_dispatch
+
+permissions:
+  contents: read
+
+env:
+  FPM_VERSION: 1.15.1
+
+jobs:
+
+  versions:
+    name: Get Version Data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restic
+        id: restic
+        uses: pozetroninc/github-action-get-latest-release@master
+        with:
+          owner: restic
+          repo: restic
+          excludes: prerelease, draft
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Last Build
+        id: last_build
+        run: echo "last_version=$(cat LATEST-VERSION)" >> "$GITHUB_OUTPUT"
+    outputs:
+      restic_version: ${{ steps.restic.outputs.release }}
+      last_version: ${{ steps.last_build.outputs.last_version }}
+
+
+  packages:
+    name: Debian Packages
+    needs: versions
+    if: needs.versions.outputs.restic_version != needs.versions.outputs.last_version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Restic Binaries
+        shell: bash
+        run: |
+          VERSION_TAG="${{ needs.versions.outputs.restic_version }}"
+          VERSION_NO_V="${VERSION_TAG:1}"
+          wget "https://github.com/restic/restic/releases/download/$VERSION_TAG/restic_$VERSION_NO_V_linux_386.bz2"
+          wget "https://github.com/restic/restic/releases/download/$VERSION_TAG/restic_$VERSION_NO_V_linux_amd64.bz2"
+          wget "https://github.com/restic/restic/releases/download/$VERSION_TAG/restic_$VERSION_NO_V_linux_arm.bz2"
+          wget "https://github.com/restic/restic/releases/download/$VERSION_TAG/restic_$VERSION_NO_V_linux_arm64.bz2"
+          bunzip2 *.bz2
+          rm *.bz2
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Ruby version
+        run: ruby --version
+      - name: Install fpm
+        run: |
+          gem install --no-document fpm -v "$FPM_VERSION"
+
+      - name: Build packages
+        shell: bash
+        run: |
+          mkdir -p out
+          chmod 0555 ./restic_*
+          VERSION_TAG="${{ needs.versions.outputs.restic_version }}"
+          VERSION_NO_V="${VERSION_TAG:1}"
+          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-amd64.deb -a amd64 ./out/restic_${VERSION_NO_V}_linux_amd64=/usr/bin/restic
+          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-i386.deb -a i386 ./out/restic_${VERSION_NO_V}_linux_386=/usr/bin/restic
+          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-arm64.deb -a arm64 ./out/restic_${VERSION_NO_V}_linux_arm64=/usr/bin/restic
+          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-armhf.deb -a armhf ./out/restic_${VERSION_NO_V}_linux_arm=/usr/bin/restic
+
+      - name: Upload binaries & packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: Packages
+          path: out/*.deb
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        path: repo_working
+
+      - name: Update LATEST-VERSION
+        shell: bash
+        run: |
+          cd repo_working
+          cat "${{ needs.versions.outputs.restic_version }}" > ./LATEST-VERSION
+
+      - name: Commit LATEST-VERSION
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: 'LATEST-VERSION'
+          author_name: cdzombak-3p-release-bot
+          author_email: cdzombak-3p-release-bot@users.noreply.github.com
+          cwd: './repo_working'
+          message: 'Update LATEST-VERSION'
+          pathspec_error_handling: exitImmediately
+          push: true
+
+
+  release:
+    name: GitHub Release
+    needs: packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+
+      - name: Download packages
+        uses: actions/download-artifact@v3
+        with:
+          name: Packages
+          path: out
+      - name: List artifacts
+        working-directory: out
+        run: ls -R
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: out/*.deb
+          prerelease: false
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+
+
+  packagecloud:
+    name: PackageCloud
+    needs: packages
+    if: needs.meta.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Download packages
+        uses: actions/download-artifact@v3
+        with:
+          name: Packages
+          path: out
+      - name: List artifacts
+        run: ls -R
+        working-directory: out
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Ruby version
+        run: ruby --version
+      - name: Install PackageCloud CLI
+        run: |
+          gem install --no-document package_cloud
+
+      - name: Push to PackageCloud
+        env:
+          PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+        run: |
+          package_cloud push --yes cdzombak/3p/any/any out/*.deb

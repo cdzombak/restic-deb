@@ -1,0 +1,6 @@
+-s dir
+--name restic
+--description "Fast, secure, efficient backup program (packaged for Debian by github.com/cdzombak)"
+--url "https://github.com/cdzombak/restic-deb"
+--maintainer "Chris Dzombak <https://www.dzombak.com>"
+--license "BSD 2-Clause"
