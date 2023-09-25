@@ -40,17 +40,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download Restic Binaries
         shell: bash
         run: |
           VERSION_TAG="${{ needs.versions.outputs.restic_version }}"
           VERSION_NO_V="${VERSION_TAG:1}"
+          mkdir -p ./src
+          pushd ./src
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_386.bz2"
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_amd64.bz2"
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_arm.bz2"
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_arm64.bz2"
           bunzip2 *.bz2
-          rm *.bz2
+          ls -l
+          popd
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -66,14 +72,14 @@ jobs:
       - name: Build packages
         shell: bash
         run: |
-          mkdir -p out
-          chmod 0555 ./restic_*
+          mkdir -p ./out
+          chmod 0555 ./src/restic_*
           VERSION_TAG="${{ needs.versions.outputs.restic_version }}"
           VERSION_NO_V="${VERSION_TAG:1}"
-          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-amd64.deb -a amd64 ./out/restic_${VERSION_NO_V}_linux_amd64=/usr/bin/restic
-          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-i386.deb -a i386 ./out/restic_${VERSION_NO_V}_linux_386=/usr/bin/restic
-          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-arm64.deb -a arm64 ./out/restic_${VERSION_NO_V}_linux_arm64=/usr/bin/restic
-          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-armhf.deb -a armhf ./out/restic_${VERSION_NO_V}_linux_arm=/usr/bin/restic
+          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-amd64.deb -a amd64 ./src/restic_${VERSION_NO_V}_linux_amd64=/usr/bin/restic
+          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-i386.deb -a i386 ./src/restic_${VERSION_NO_V}_linux_386=/usr/bin/restic
+          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-arm64.deb -a arm64 ./src/restic_${VERSION_NO_V}_linux_arm64=/usr/bin/restic
+          fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-armhf.deb -a armhf ./src/restic_${VERSION_NO_V}_linux_arm=/usr/bin/restic
 
       - name: Upload binaries & packages
         uses: actions/upload-artifact@v3
@@ -81,15 +87,9 @@ jobs:
           name: Packages
           path: out/*.deb
 
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          path: repo_working
-
       - name: Update LATEST-VERSION
         shell: bash
         run: |
-          cd repo_working
           cat "${{ needs.versions.outputs.restic_version }}" > ./LATEST-VERSION
 
       - name: Commit LATEST-VERSION
@@ -98,7 +98,6 @@ jobs:
           add: 'LATEST-VERSION'
           author_name: cdzombak-3p-release-bot
           author_email: cdzombak-3p-release-bot@users.noreply.github.com
-          cwd: './repo_working'
           message: 'Update LATEST-VERSION'
           pathspec_error_handling: exitImmediately
           push: true
