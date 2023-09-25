@@ -102,6 +102,7 @@ jobs:
           message: 'Update LATEST-VERSION'
           pathspec_error_handling: exitImmediately
           push: true
+          tag: "${{ needs.versions.outputs.restic_version }}"
 
 
   release:
