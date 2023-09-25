@@ -80,6 +80,7 @@ jobs:
           fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-i386.deb -a i386 ./src/restic_${VERSION_NO_V}_linux_386=/usr/bin/restic
           fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-arm64.deb -a arm64 ./src/restic_${VERSION_NO_V}_linux_arm64=/usr/bin/restic
           fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-armhf.deb -a armhf ./src/restic_${VERSION_NO_V}_linux_arm=/usr/bin/restic
+          ls -lh ./out
 
       - name: Upload binaries & packages
         uses: actions/upload-artifact@v3
