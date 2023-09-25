@@ -49,8 +49,8 @@ jobs:
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_amd64.bz2"
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_arm.bz2"
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_arm64.bz2"
-          bunzip2 -- *.bz2
-          rm -- *.bz2
+          bunzip2 *.bz2
+          rm *.bz2
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
