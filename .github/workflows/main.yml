@@ -5,7 +5,7 @@ name: Release Pipeline
   workflow_dispatch
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   FPM_VERSION: 1.15.1
@@ -55,7 +55,7 @@ jobs:
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_arm.bz2"
           wget -q "https://github.com/restic/restic/releases/download/${VERSION_TAG}/restic_${VERSION_NO_V}_linux_arm64.bz2"
           bunzip2 -- *.bz2
-          ls -l
+          ls -lh
           popd
 
       - name: Setup Ruby
@@ -107,8 +107,6 @@ jobs:
     name: GitHub Release
     needs: packages
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
 
       - name: Download packages
