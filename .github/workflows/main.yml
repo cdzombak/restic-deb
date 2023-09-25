@@ -109,7 +109,7 @@ jobs:
 
   release:
     name: GitHub Release
-    needs: packages
+    needs: [packages, versions]
     runs-on: ubuntu-latest
     steps:
 
