@@ -129,6 +129,7 @@ jobs:
           prerelease: false
           fail_on_unmatched_files: true
           generate_release_notes: false
+          tag_name: "${{ needs.versions.outputs.restic_version }}"
 
 
   packagecloud:
