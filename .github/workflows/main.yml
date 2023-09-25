@@ -90,7 +90,7 @@ jobs:
       - name: Update LATEST-VERSION
         shell: bash
         run: |
-          cat "${{ needs.versions.outputs.restic_version }}" > ./LATEST-VERSION
+          echo "${{ needs.versions.outputs.restic_version }}" > ./LATEST-VERSION
 
       - name: Commit LATEST-VERSION
         uses: EndBug/add-and-commit@v9
