@@ -83,7 +83,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
-        path: repo_working
+        with:
+          path: repo_working
 
       - name: Update LATEST-VERSION
         shell: bash
