@@ -13,7 +13,6 @@ env:
   FPM_VERSION: 1.15.1
 
 jobs:
-
   versions:
     name: Get Version Data
     runs-on: ubuntu-latest
@@ -33,7 +32,6 @@ jobs:
     outputs:
       restic_version: ${{ steps.restic.outputs.release }}
       last_version: ${{ steps.last_build.outputs.last_version }}
-
 
   packages:
     name: Debian Packages
@@ -63,7 +61,7 @@ jobs:
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2'
+          ruby-version: "3.2"
           bundler-cache: true
       - name: Ruby version
         run: ruby --version
@@ -74,17 +72,17 @@ jobs:
       - name: Build packages
         shell: bash
         run: |
-          mkdir -p ./out
-          chmod 0555 ./src/restic_*
           VERSION_TAG="${{ needs.versions.outputs.restic_version }}"
           VERSION_NO_V="${VERSION_TAG:1}"
+          mkdir -p ./out
+          chmod 0555 ./src/restic_*
           fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-amd64.deb -a amd64 ./src/restic_${VERSION_NO_V}_linux_amd64=/usr/bin/restic
           fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-i386.deb -a i386 ./src/restic_${VERSION_NO_V}_linux_386=/usr/bin/restic
           fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-arm64.deb -a arm64 ./src/restic_${VERSION_NO_V}_linux_arm64=/usr/bin/restic
           fpm -t deb -v ${VERSION_NO_V} -p ./out/restic-${VERSION_NO_V}-armhf.deb -a armhf ./src/restic_${VERSION_NO_V}_linux_arm=/usr/bin/restic
           ls -lh ./out
 
-      - name: Upload binaries & packages
+      - name: Upload packages
         uses: actions/upload-artifact@v3
         with:
           name: Packages
@@ -98,21 +96,19 @@ jobs:
       - name: Commit LATEST-VERSION
         uses: EndBug/add-and-commit@v9
         with:
-          add: 'LATEST-VERSION'
+          add: "LATEST-VERSION"
           author_name: cdzombak-3p-release-bot
           author_email: cdzombak-3p-release-bot@users.noreply.github.com
-          message: 'Update LATEST-VERSION'
+          message: Update LATEST-VERSION to ${{ needs.versions.outputs.restic_version }}
           pathspec_error_handling: exitImmediately
           push: true
           tag: "${{ needs.versions.outputs.restic_version }}"
-
 
   release:
     name: GitHub Release
     needs: [packages, versions]
     runs-on: ubuntu-latest
     steps:
-
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
@@ -131,13 +127,11 @@ jobs:
           generate_release_notes: false
           tag_name: "${{ needs.versions.outputs.restic_version }}"
 
-
-  packagecloud:
-    name: PackageCloud
-    needs: packages
+  aptly:
+    name: Aptly
+    needs: [versions, packages]
     runs-on: ubuntu-latest
     steps:
-
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
@@ -147,19 +141,32 @@ jobs:
         run: ls -R
         working-directory: out
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+      - name: Login to Tailscale
+        uses: tailscale/github-action@v2
         with:
-          ruby-version: '3.2'
-          bundler-cache: true
-      - name: Ruby version
-        run: ruby --version
-      - name: Install PackageCloud CLI
-        run: |
-          gem install --no-document package_cloud
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-actions
 
-      - name: Push to PackageCloud
-        env:
-          PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+      - name: Push to Aptly Repo
+        shell: bash
         run: |
-          package_cloud push --yes cdzombak/3p/any/any out/*.deb
+          set -x
+          for DEB in out/*.deb; do
+            curl -u "${{ secrets.APTLY_CRED }}" \
+              -fsS -X POST \
+              -F file=@"${DEB}" \
+              "${{ secrets.APTLY_API }}/files/restic-${{ needs.versions.outputs.restic_version }}"
+          done
+          curl -u "${{ secrets.APTLY_CRED }}" \
+            -fsS -X POST \
+            "${{ secrets.APTLY_API }}/repos/3p/file/restic-${{ needs.versions.outputs.restic_version }}?forceReplace=1"
+
+      - name: Update Published Aptly Repo
+        run: |
+          set -x
+          curl -u "${{ secrets.APTLY_CRED }}" \
+            -fsS -X PUT \
+            -H 'Content-Type: application/json' \
+            --data '{"ForceOverwrite": true}' \
+            "${{ secrets.APTLY_API }}/publish/s3:dist.cdzombak.net:deb_3p/any?_async=true"
