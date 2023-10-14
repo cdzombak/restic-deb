@@ -4,7 +4,7 @@ Automated Debian packages built directly from official [Restic](https://github.c
 
 ## Installation
 
-### via PackageCloud
+### via Apt
 
 Install my Debian repository if you haven't already:
 
